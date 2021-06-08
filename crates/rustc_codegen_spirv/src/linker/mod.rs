@@ -6,7 +6,8 @@ mod destructure_composites;
 mod duplicates;
 mod import_export_link;
 mod inline;
-mod ipo;
+
+mod interface;mod ipo;
 mod mem2reg;
 mod param_weakening;
 mod peephole_opts;
@@ -296,6 +297,8 @@ pub fn link(sess: &Session, mut inputs: Vec<Module>, opts: &Options) -> Result<L
             let _timer = sess.timer("link_remove_duplicate_lines");
             duplicates::remove_duplicate_lines(output);
         }
+
+		interface::legalize_entrypoint(output);
 
         if opts.compact_ids {
             let _timer = sess.timer("link_compact_ids");

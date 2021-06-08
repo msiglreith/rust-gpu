@@ -126,8 +126,6 @@ impl<'tcx> CodegenCx<'tcx> {
             id.with_type(fn_void_void)
         };
 
-        let mut op_entry_point_interface_operands = vec![];
-
         let mut bx = Builder::build(self, Builder::append_block(self, stub_fn, ""));
         let mut call_args = vec![];
         let mut decoration_locations = FxHashMap::default();
@@ -136,7 +134,6 @@ impl<'tcx> CodegenCx<'tcx> {
             self.declare_shader_interface_for_param(
                 entry_arg_abi,
                 hir_param,
-                &mut op_entry_point_interface_operands,
                 &mut bx,
                 &mut call_args,
                 &mut decoration_locations,
@@ -151,7 +148,7 @@ impl<'tcx> CodegenCx<'tcx> {
             execution_model,
             stub_fn_id,
             name,
-            op_entry_point_interface_operands,
+            vec![], // will be filled during linking, see [`interface::legalize_entrypoint`].
         );
         stub_fn_id
     }
@@ -277,7 +274,6 @@ impl<'tcx> CodegenCx<'tcx> {
         &self,
         entry_arg_abi: &ArgAbi<'tcx, Ty<'tcx>>,
         hir_param: &hir::Param<'tcx>,
-        op_entry_point_interface_operands: &mut Vec<Word>,
         bx: &mut Builder<'_, 'tcx>,
         call_args: &mut Vec<SpirvValue>,
         decoration_locations: &mut FxHashMap<StorageClass, u32>,
@@ -534,17 +530,5 @@ impl<'tcx> CodegenCx<'tcx> {
         // Emit the `OpVariable` with its *Result* ID set to `var`.
         self.emit_global()
             .variable(var_ptr_spirv_type, Some(var), storage_class, None);
-
-        // Record this `OpVariable` as needing to be added (if applicable),
-        // to the *Interface* operands of the `OpEntryPoint` instruction.
-        if self.emit_global().version().unwrap() > (1, 3) {
-            // SPIR-V >= v1.4 includes all OpVariables in the interface.
-            op_entry_point_interface_operands.push(var);
-        } else {
-            // SPIR-V <= v1.3 only includes Input and Output in the interface.
-            if storage_class == StorageClass::Input || storage_class == StorageClass::Output {
-                op_entry_point_interface_operands.push(var);
-            }
-        }
     }
 }
