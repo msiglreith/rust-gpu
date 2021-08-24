@@ -174,16 +174,15 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         result_type: Word,
         args: &[SpirvValue],
     ) -> SpirvValue {
-        // Signature: fn load<T>(array: &[u32], index: u32) -> T;
-        if args.len() != 3 {
+        // Signature: fn load<T>(array: &RuntimeArray<u32>, index: u32) -> T;
+        if args.len() != 2 {
             self.fatal(&format!(
-                "buffer_load_intrinsic should have 3 args, it has {}",
+                "buffer_load_intrinsic should have 2 args, it has {}",
                 args.len()
             ));
         }
-        // Note that the &[u32] gets split into two arguments - pointer, length
         let array = args[0];
-        let byte_index = args[2];
+        let byte_index = args[1];
         let two = self.constant_u32(DUMMY_SP, 2);
         let word_index = self.lshr(byte_index, two);
         self.recurse_load_type(result_type, result_type, array, word_index, 0)
@@ -329,19 +328,18 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Note: DOES NOT do bounds checking! Bounds checking is expected to be done in the caller.
     pub fn codegen_buffer_store_intrinsic(&mut self, args: &[SpirvValue]) {
-        // Signature: fn store<T>(array: &[u32], index: u32, value: T);
-        if args.len() != 4 {
+        // Signature: fn store<T>(array: &mut RuntimeArray<u32>, index: u32, value: T);
+        if args.len() != 3 {
             self.fatal(&format!(
-                "buffer_store_intrinsic should have 4 args, it has {}",
+                "buffer_load_intrinsic should have 3 args, it has {}",
                 args.len()
             ));
         }
-        // Note that the &[u32] gets split into two arguments - pointer, length
         let array = args[0];
-        let byte_index = args[2];
+        let byte_index = args[1];
         let two = self.constant_u32(DUMMY_SP, 2);
         let word_index = self.lshr(byte_index, two);
-        let value = args[3];
+        let value = args[2];
         self.recurse_store_type(value.ty, value, array, word_index, 0);
     }
 }

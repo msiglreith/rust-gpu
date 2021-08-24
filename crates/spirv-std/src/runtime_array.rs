@@ -35,3 +35,23 @@ impl<T> RuntimeArray<T> {
         }
     }
 }
+
+impl RuntimeArray<u32> {
+    #[spirv(buffer_load_intrinsic)]
+    #[spirv_std_macros::gpu_only]
+    #[allow(improper_ctypes_definitions)]
+    pub unsafe extern "unadjusted" fn load<T>(&self, _offset: u32) -> T {
+        unimplemented!()
+    } // actually implemented in the compiler
+
+    #[spirv(buffer_store_intrinsic)]
+    #[spirv_std_macros::gpu_only]
+    #[allow(improper_ctypes_definitions)]
+    pub unsafe extern "unadjusted" fn store<T>(
+        &mut self,
+        _offset: u32,
+        _value: T,
+    ) {
+        unimplemented!()
+    } // actually implemented in the compiler
+}

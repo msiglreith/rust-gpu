@@ -16,8 +16,15 @@ use rustc_middle::ty::{Instance, Ty, TyKind};
 use rustc_span::Span;
 use rustc_target::abi::{
     call::{ArgAbi, ArgAttribute, ArgAttributes, FnAbi, PassMode},
-    LayoutOf, Size,
+    LayoutOf, Size, Align
 };
+
+const BINDLESS_BUFFER_SET: u32 = 0;
+const BINDLESS_SAMPLED_TEXTURE_SET: u32 = 1;
+const BINDLESS_SAMPLER_SET: u32 = 2;
+const BINDLESS_TLAS_SET: u32 = 3;
+const BINDLESS_STORAGE_TEXTURE_SET: u32 = 4;
+const BINDLESS_STORAGE_TEXEL_SET: u32 = 5;
 
 impl<'tcx> CodegenCx<'tcx> {
     // Entry points declare their "interface" (all uniforms, inputs, outputs, etc.) as parameters.
@@ -154,6 +161,213 @@ impl<'tcx> CodegenCx<'tcx> {
             vec![], // will be filled during linking, see [`interface::legalize_entrypoint`].
         );
         stub_fn_id
+    }
+
+    pub fn buffer_bindless_descriptor_set(&self, ty: Word) -> Word {
+        *self
+            .bindless_descriptor_sets
+            .borrow_mut()
+            .entry(ty)
+            .or_insert_with(|| {
+                let buffer_struct = SpirvType::Adt {
+                    def_id: None,
+                    size: Some(Size::from_bytes(4)),
+                    align: Align::from_bytes(4).unwrap(),
+                    field_types: vec![ty],
+                    field_offsets: vec![],
+                    field_names: None,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+
+                let runtime_array_struct = SpirvType::RuntimeArray {
+                    element: buffer_struct,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+
+                let uniform_ptr_runtime_array = SpirvType::Pointer {
+                    pointee: runtime_array_struct,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+
+                let mut emit_global = self.emit_global();
+                let buffer = emit_global
+                    .variable(
+                        uniform_ptr_runtime_array,
+                        None,
+                        if self.target.spirv_version() <= (1, 3) {
+                            StorageClass::Uniform
+                        } else {
+                            StorageClass::StorageBuffer
+                        },
+                        None,
+                    )
+                    .with_type(uniform_ptr_runtime_array)
+                    .def_cx(self);
+
+                emit_global.decorate(
+                    buffer,
+                    rspirv::spirv::Decoration::DescriptorSet,
+                    std::iter::once(Operand::LiteralInt32(BINDLESS_BUFFER_SET)),
+                );
+                emit_global.decorate(
+                    buffer,
+                    rspirv::spirv::Decoration::Binding,
+                    std::iter::once(Operand::LiteralInt32(0)),
+                );
+
+                if self.target.spirv_version() <= (1, 3) {
+                    emit_global.decorate(
+                        buffer_struct,
+                        rspirv::spirv::Decoration::BufferBlock,
+                        std::iter::empty(),
+                    );
+                } else {
+                    emit_global.decorate(
+                        buffer_struct,
+                        rspirv::spirv::Decoration::Block,
+                        std::iter::empty(),
+                    );
+                }
+
+                emit_global.member_decorate(
+                    buffer_struct,
+                    0,
+                    rspirv::spirv::Decoration::Offset,
+                    std::iter::once(Operand::LiteralInt32(0)),
+                );
+
+                buffer
+            })
+    }
+
+    pub fn texture_bindless_descriptor_set(&self, image: Word, dim: Dim, sampled: u32) -> Word {
+        *self
+            .bindless_descriptor_sets
+            .borrow_mut()
+            .entry(image)
+            .or_insert_with(|| {
+                let set = match (dim, sampled) {
+                    (Dim::DimBuffer, 2) => BINDLESS_STORAGE_TEXEL_SET,
+                    (_, 1) => BINDLESS_SAMPLED_TEXTURE_SET,
+                    (_, 2) => BINDLESS_STORAGE_TEXTURE_SET,
+                    _ => unimplemented!(),
+                };
+
+                let runtime_array_image =
+                    SpirvType::RuntimeArray { element: image }.def(rustc_span::DUMMY_SP, self);
+
+                let uniform_ptr_runtime_array = SpirvType::Pointer {
+                    pointee: runtime_array_image,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+
+                let mut emit_global = self.emit_global();
+                let image_array = emit_global
+                    .variable(
+                        uniform_ptr_runtime_array,
+                        None,
+                        StorageClass::UniformConstant,
+                        None,
+                    )
+                    .with_type(uniform_ptr_runtime_array)
+                    .def_cx(self);
+
+                emit_global.decorate(
+                    image_array,
+                    rspirv::spirv::Decoration::DescriptorSet,
+                    std::iter::once(Operand::LiteralInt32(set)),
+                );
+                emit_global.decorate(
+                    image_array,
+                    rspirv::spirv::Decoration::Binding,
+                    std::iter::once(Operand::LiteralInt32(0)),
+                );
+
+                image_array
+            })
+    }
+
+    pub fn sampler_bindless_descriptor_set(&self) -> Word {
+        let sampler = SpirvType::Sampler.def(rustc_span::DUMMY_SP, self);
+        *self
+            .bindless_descriptor_sets
+            .borrow_mut()
+            .entry(sampler)
+            .or_insert_with(|| {
+                let runtime_array_sampler =
+                    SpirvType::RuntimeArray { element: sampler }.def(rustc_span::DUMMY_SP, self);
+                let uniform_ptr_runtime_array = SpirvType::Pointer {
+                    pointee: runtime_array_sampler,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+
+                let mut emit_global = self.emit_global();
+                let sampler_array = emit_global
+                    .variable(
+                        uniform_ptr_runtime_array,
+                        None,
+                        StorageClass::UniformConstant,
+                        None,
+                    )
+                    .with_type(uniform_ptr_runtime_array)
+                    .def_cx(self);
+
+                emit_global.decorate(
+                    sampler_array,
+                    rspirv::spirv::Decoration::DescriptorSet,
+                    std::iter::once(Operand::LiteralInt32(BINDLESS_SAMPLER_SET)),
+                );
+                emit_global.decorate(
+                    sampler_array,
+                    rspirv::spirv::Decoration::Binding,
+                    std::iter::once(Operand::LiteralInt32(0)),
+                );
+
+                sampler_array
+            })
+    }
+
+    pub fn acceleration_structure_bindless_descriptor_set(&self) -> Word {
+        let acceleration_structure =
+            SpirvType::AccelerationStructureKhr.def(rustc_span::DUMMY_SP, self);
+        *self
+            .bindless_descriptor_sets
+            .borrow_mut()
+            .entry(acceleration_structure)
+            .or_insert_with(|| {
+                let runtime_array_as = SpirvType::RuntimeArray {
+                    element: acceleration_structure,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+                let uniform_ptr_runtime_array = SpirvType::Pointer {
+                    pointee: runtime_array_as,
+                }
+                .def(rustc_span::DUMMY_SP, self);
+
+                let mut emit_global = self.emit_global();
+                let acceleration_structure_array = emit_global
+                    .variable(
+                        uniform_ptr_runtime_array,
+                        None,
+                        StorageClass::UniformConstant,
+                        None,
+                    )
+                    .with_type(uniform_ptr_runtime_array)
+                    .def_cx(self);
+
+                emit_global.decorate(
+                    acceleration_structure_array,
+                    rspirv::spirv::Decoration::DescriptorSet,
+                    std::iter::once(Operand::LiteralInt32(BINDLESS_TLAS_SET)),
+                );
+                emit_global.decorate(
+                    acceleration_structure_array,
+                    rspirv::spirv::Decoration::Binding,
+                    std::iter::once(Operand::LiteralInt32(0)),
+                );
+
+                acceleration_structure_array
+            })
     }
 
     fn infer_param_ty_and_storage_class(

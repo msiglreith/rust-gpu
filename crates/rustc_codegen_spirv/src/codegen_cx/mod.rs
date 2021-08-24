@@ -70,6 +70,8 @@ pub struct CodegenCx<'tcx> {
     pub buffer_load_intrinsic_fn_id: RefCell<FxHashSet<Word>>,
     /// Intrinsic for storing a <T> into a &[u32]
     pub buffer_store_intrinsic_fn_id: RefCell<FxHashSet<Word>>,
+    //
+    pub resource_access_fn_id: RefCell<FxHashSet<Word>>,
     /// Builtin bounds-checking panics (from MIR `Assert`s) call `#[lang = "panic_bounds_check"]`.
     pub panic_bounds_check_fn_id: Cell<Option<Word>>,
 
@@ -81,6 +83,13 @@ pub struct CodegenCx<'tcx> {
 
     /// Information about the SPIR-V target.
     pub target: SpirvTarget,
+
+    /// This contains the information about the global
+    /// descriptor sets that are always bound.
+    ///
+    /// - Keys: spirv type
+    /// - Values: descriptor set id
+    pub bindless_descriptor_sets: RefCell<FxHashMap<Word, Word>>,
 }
 
 impl<'tcx> CodegenCx<'tcx> {
@@ -129,9 +138,11 @@ impl<'tcx> CodegenCx<'tcx> {
             panic_fn_id: Default::default(),
             buffer_load_intrinsic_fn_id: Default::default(),
             buffer_store_intrinsic_fn_id: Default::default(),
+            resource_access_fn_id: Default::default(),
             panic_bounds_check_fn_id: Default::default(),
             i8_i16_atomics_allowed: false,
             codegen_args,
+            bindless_descriptor_sets: Default::default(),
         }
     }
 
