@@ -181,11 +181,22 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 args.len()
             ));
         }
-        let array = args[0];
-        let byte_index = args[1];
+
         let two = self.constant_u32(DUMMY_SP, 2);
-        let word_index = self.lshr(byte_index, two);
-        self.recurse_load_type(result_type, result_type, array, word_index, 0)
+        let array = args[0];
+
+        if let SpirvType::Pointer { pointee } = self.lookup_type(array.ty) {
+            match self.lookup_type(pointee) {
+                SpirvType::RuntimeArray { .. } => {
+                    let byte_index = args[1];
+                    let word_index = self.lshr(byte_index, two);
+                    self.recurse_load_type(result_type, result_type, array, word_index, 0)
+                }
+                _ => todo!(),
+            }
+        } else {
+            self.fatal("buffer_load_intrinsic first arg must be a pointer type")
+        }
     }
 
     fn store_err(&mut self, original_type: Word, value: SpirvValue) {
@@ -331,15 +342,26 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // Signature: fn store<T>(array: &mut RuntimeArray<u32>, index: u32, value: T);
         if args.len() != 3 {
             self.fatal(&format!(
-                "buffer_load_intrinsic should have 3 args, it has {}",
+                "buffer_store_intrinsic should have 3 args, it has {}",
                 args.len()
             ));
         }
-        let array = args[0];
-        let byte_index = args[1];
+
         let two = self.constant_u32(DUMMY_SP, 2);
-        let word_index = self.lshr(byte_index, two);
-        let value = args[2];
-        self.recurse_store_type(value.ty, value, array, word_index, 0);
+        let array = args[0];
+
+        if let SpirvType::Pointer { pointee } = self.lookup_type(array.ty) {
+            match self.lookup_type(pointee) {
+                SpirvType::RuntimeArray { .. } => {
+                    let byte_index = args[1];
+                    let word_index = self.lshr(byte_index, two);
+                    let value = args[2];
+                    self.recurse_store_type(value.ty, value, array, word_index, 0);
+                }
+                _ => todo!(),
+            }
+        } else {
+            self.fatal("buffer_store_intrinsic first arg must be a pointer type")
+        }
     }
 }
