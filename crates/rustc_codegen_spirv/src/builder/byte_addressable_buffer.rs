@@ -51,7 +51,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn load_vec_or_arr(
+    fn load_vec_mat_or_arr(
         &mut self,
         original_type: Word,
         result_type: Word,
@@ -104,7 +104,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let val = self.load_u32(array, dynamic_word_index, constant_word_offset);
                 self.bitcast(val, result_type)
             }
-            SpirvType::Vector { element, count } => self.load_vec_or_arr(
+            SpirvType::Vector { element, count } => self.load_vec_mat_or_arr(
+                original_type,
+                result_type,
+                array,
+                dynamic_word_index,
+                constant_word_offset,
+                element,
+                count,
+            ),
+            SpirvType::Matrix { element, count } => self.load_vec_mat_or_arr(
                 original_type,
                 result_type,
                 array,
@@ -118,7 +127,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     Some(count) => count as u32,
                     None => return self.load_err(original_type, result_type),
                 };
-                self.load_vec_or_arr(
+                self.load_vec_mat_or_arr(
                     original_type,
                     result_type,
                     array,
