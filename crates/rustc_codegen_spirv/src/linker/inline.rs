@@ -63,13 +63,7 @@ pub fn inline(module: &mut Module) {
 fn compute_disallowed_argument_and_return_types(
     module: &Module,
 ) -> (FxHashSet<Word>, FxHashSet<Word>) {
-    let allowed_argument_storage_classes = &[
-        StorageClass::UniformConstant,
-        StorageClass::Function,
-        StorageClass::Private,
-        StorageClass::Workgroup,
-        StorageClass::AtomicCounter,
-    ];
+
     let mut disallowed_argument_types = FxHashSet::default();
     let mut disallowed_pointees = FxHashSet::default();
     let mut disallowed_return_types = FxHashSet::default();
@@ -78,12 +72,7 @@ fn compute_disallowed_argument_and_return_types(
             Op::TypePointer => {
                 let storage_class = inst.operands[0].unwrap_storage_class();
                 let pointee = inst.operands[1].unwrap_id_ref();
-                if !allowed_argument_storage_classes.contains(&storage_class)
-                    || disallowed_pointees.contains(&pointee)
-                    || disallowed_argument_types.contains(&pointee)
-                {
-                    disallowed_argument_types.insert(inst.result_id.unwrap());
-                }
+                disallowed_argument_types.insert(inst.result_id.unwrap());
                 disallowed_pointees.insert(inst.result_id.unwrap());
                 disallowed_return_types.insert(inst.result_id.unwrap());
             }
