@@ -2215,8 +2215,6 @@ dependencies = [
 [[package]]
 name = "rspirv"
 version = "0.10.0+1.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce0e0a01cf9883c6f2846168515b5be6c4995bb90d4eeb7595bb0088a1001759"
 dependencies = [
  "derive_more",
  "fxhash",
@@ -2487,8 +2485,6 @@ dependencies = [
 [[package]]
 name = "spirv"
 version = "0.2.0+1.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "246bfa38fe3db3f1dfc8ca5a2cdeb7348c78be2112740cc0ec8ef18b6d94f830"
 dependencies = [
  "bitflags",
  "num-traits",
@@ -2531,8 +2527,6 @@ dependencies = [
 [[package]]
 name = "spirv-tools"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "663d6a7c1627d47e402e3a41076f6147bbe4bf11fd98687e1016599b3979f6d3"
 dependencies = [
  "memchr",
  "spirv-tools-sys",
@@ -2542,8 +2536,6 @@ dependencies = [
 [[package]]
 name = "spirv-tools-sys"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbb083780a3721ff6dd496dbdc3b90c033b443bec676918b89c179b330081983"
 dependencies = [
  "cc",
 ]

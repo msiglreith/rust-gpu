@@ -147,6 +147,11 @@ pub fn link(sess: &Session, mut inputs: Vec<Module>, opts: &Options) -> Result<L
         zombies::remove_zombies(sess, &mut output);
     }
 
+    if opts.dce {
+        let _timer = sess.timer("link_dce");
+        dce::dce(&mut output);
+    }
+
     {
         let _timer = sess.timer("specialize_generic_storage_class");
         // HACK(eddyb) `specializer` requires functions' blocks to be in RPO order
@@ -172,7 +177,7 @@ pub fn link(sess: &Session, mut inputs: Vec<Module>, opts: &Options) -> Result<L
                 // TODO(eddyb) investigate whether this can end up in a pointer
                 // type that's the value of a module-scoped variable, and whether
                 // `Function` is actually invalid! (may need `Private`)
-                concrete_fallback: Operand::StorageClass(StorageClass::Function),
+                concrete_fallback: Operand::StorageClass(StorageClass::PhysicalStorageBuffer),
             },
         );
     }

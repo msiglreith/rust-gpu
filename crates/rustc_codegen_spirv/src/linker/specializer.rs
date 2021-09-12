@@ -626,7 +626,7 @@ impl<S: Specialization> Specializer<S> {
             };
 
             // Inference variables become "generic" parameters.
-            if param_count > 0 {
+            if inst.class.opcode == Op::TypePointer || param_count > 0 {
                 self.generics.insert(
                     result_id,
                     Generic {
@@ -2046,7 +2046,7 @@ impl<'a, S: Specialization> InferCx<'a, S> {
 
         // If the `OpTypeFunction` is indeed "generic", we have to extract the
         // return / parameter types for `OpReturnValue` and `OpFunctionParameter`.
-        let ret_ty = match self.type_of_result.get(&func_id).cloned() {
+        let _ret_ty = match self.type_of_result.get(&func_id).cloned() {
             Some(InferOperand::Instance(instance)) => {
                 let generic = &self.specializer.generics[&instance.generic_id];
                 assert_eq!(generic.def.class.opcode, Op::TypeFunction);
@@ -2105,15 +2105,15 @@ impl<'a, S: Specialization> InferCx<'a, S> {
                 // way to inject `ret_ty` into `spirv_type_constraints` rules.
                 match inst.class.opcode {
                     Op::ReturnValue => {
-                        let ret_val_id = inst.operands[0].unwrap_id_ref();
-                        if let (Some(expected), Some(found)) = (
-                            ret_ty.clone(),
-                            self.type_of_result.get(&ret_val_id).cloned(),
-                        ) {
-                            if let Err(e) = self.equate_infer_operands(expected, found) {
-                                e.report(inst);
-                            }
-                        }
+                        // let ret_val_id = inst.operands[0].unwrap_id_ref();
+                        // if let (Some(expected), Some(found)) = (
+                        //     ret_ty.clone(),
+                        //     self.type_of_result.get(&ret_val_id).cloned(),
+                        // ) {
+                        //     if let Err(e) = self.equate_infer_operands(expected, found) {
+                        //         e.report(inst);
+                        //     }
+                        // }
                     }
 
                     Op::Return => {}

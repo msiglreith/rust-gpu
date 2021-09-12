@@ -3,7 +3,7 @@ use crate::abi::ConvSpirvType;
 use crate::builder_spirv::{BuilderCursor, SpirvConst, SpirvValue, SpirvValueExt, SpirvValueKind};
 use crate::spirv_type::SpirvType;
 use rspirv::dr::{InsertPoint, Instruction, Operand};
-use rspirv::spirv::{Capability, MemoryModel, MemorySemantics, Op, Scope, StorageClass, Word};
+use rspirv::spirv::{Capability, MemoryModel, MemoryAccess, MemorySemantics, Op, Scope, StorageClass, Word};
 use rustc_codegen_ssa::common::{
     AtomicOrdering, AtomicRmwBinOp, IntPredicate, RealPredicate, SynchronizationScope,
 };
@@ -231,6 +231,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 self.fatal("memset on runtime arrays not implemented yet")
             }
             SpirvType::Pointer { .. } => self.fatal("memset on pointers not implemented yet"),
+            SpirvType::PhysicalPointer { .. } => self.fatal("memset on pointers not implemented yet"),
             SpirvType::Function { .. } => self.fatal("memset on functions not implemented yet"),
             SpirvType::Image { .. } => self.fatal("cannot memset image"),
             SpirvType::Sampler => self.fatal("cannot memset sampler"),
@@ -291,6 +292,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 self.fatal("memset on runtime arrays not implemented yet")
             }
             SpirvType::Pointer { .. } => self.fatal("memset on pointers not implemented yet"),
+            SpirvType::PhysicalPointer { .. } => self.fatal("memset on pointers not implemented yet"),
             SpirvType::Function { .. } => self.fatal("memset on functions not implemented yet"),
             SpirvType::Image { .. } => self.fatal("cannot memset image"),
             SpirvType::Sampler => self.fatal("cannot memset sampler"),
@@ -859,8 +861,14 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
                 ty
             )),
         };
+        let align = self.lookup_type(ty).alignof(self.cx).bytes() as _;
         self.emit()
-            .load(ty, None, ptr.def(self), None, empty())
+            .load(
+                ty,
+                None,
+                ptr.def(self),
+                Some(MemoryAccess::ALIGNED),
+                std::iter::once(Operand::LiteralInt32(align)))
             .unwrap()
             .with_type(ty)
     }
@@ -1065,7 +1073,7 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
 
     fn struct_gep(&mut self, ty: Self::Type, ptr: Self::Value, idx: u64) -> Self::Value {
         let pointee = match self.lookup_type(ptr.ty) {
-            SpirvType::Pointer { pointee } => {
+            SpirvType::Pointer { pointee } | SpirvType::PhysicalPointer { pointee } => {
                 assert_ty_eq!(self, ty, pointee);
                 pointee
             }
@@ -1388,7 +1396,7 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
             ),
 
             _ => match self.lookup_type(val.ty) {
-                SpirvType::Pointer { pointee } => (val, pointee),
+                SpirvType::Pointer { pointee } | SpirvType::PhysicalPointer { pointee } => (val, pointee),
                 other => self.fatal(&format!(
                     "pointercast called on non-pointer source type: {:?}",
                     other
@@ -1685,7 +1693,7 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     fn memcpy(
         &mut self,
         dst: Self::Value,
-        _dst_align: Align,
+        dst_align: Align,
         src: Self::Value,
         _src_align: Align,
         size: Self::Value,
@@ -1703,7 +1711,7 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
             return;
         }
         let src_pointee = match self.lookup_type(src.ty) {
-            SpirvType::Pointer { pointee } => Some(pointee),
+            SpirvType::Pointer { pointee } | SpirvType::PhysicalPointer { pointee } => Some(pointee),
             _ => None,
         };
         let src_element_size = src_pointee.and_then(|p| self.lookup_type(p).sizeof(self));
@@ -1711,8 +1719,9 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
             if let Some(const_value) = src.const_fold_load(self) {
                 self.store(const_value, dst, Align::from_bytes(0).unwrap());
             } else {
+
                 self.emit()
-                    .copy_memory(dst.def(self), src.def(self), None, None, empty())
+                    .copy_memory(dst.def(self), src.def(self), None, Some(MemoryAccess::ALIGNED), std::iter::once(Operand::LiteralInt32(dst_align.bytes() as _)))
                     .unwrap();
             }
         } else {
@@ -2218,6 +2227,36 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
             SpirvValue {
                 kind: SpirvValueKind::IllegalTypeUsed(void_ty),
                 ty: void_ty,
+            }
+        } else if self.resource_from_handle_fn_id.borrow().contains(&callee_val) {
+            let handle = args[0].def(self);
+            match self.lookup_type(result_type) {
+                SpirvType::Pointer { pointee } => {
+                    let physical_ptr = SpirvType::PhysicalPointer { pointee }.def(rustc_span::DUMMY_SP, self);
+                    self.emit()
+                        .convert_u_to_ptr(physical_ptr, None, handle)
+                        .unwrap()
+                        .with_type(physical_ptr)
+                }
+                SpirvType::Image { .. } => {
+                    self.emit()
+                        .convert_u_to_image_nv(result_type, None, handle)
+                        .unwrap()
+                        .with_type(result_type)
+                }
+                SpirvType::SampledImage { .. } => {
+                    self.emit()
+                        .convert_u_to_sampled_image_nv(result_type, None, handle)
+                        .unwrap()
+                        .with_type(result_type)
+                }
+                SpirvType::AccelerationStructureKhr => {
+                    self.emit()
+                        .convert_u_to_acceleration_structure_khr(result_type, None, handle)
+                        .unwrap()
+                        .with_type(result_type)
+                }
+                ty => self.fatal(&format!("{:?} unsupported for physical storage buffer", ty)),
             }
         } else {
             let args = args.iter().map(|arg| arg.def(self)).collect::<Vec<_>>();

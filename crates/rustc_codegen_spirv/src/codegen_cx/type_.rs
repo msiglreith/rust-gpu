@@ -175,7 +175,7 @@ impl<'tcx> BaseTypeMethods<'tcx> for CodegenCx<'tcx> {
             }
             SpirvType::Vector { .. } => TypeKind::Vector,
             SpirvType::Array { .. } | SpirvType::RuntimeArray { .. } | SpirvType::Matrix { .. } => TypeKind::Array,
-            SpirvType::Pointer { .. } => TypeKind::Pointer,
+            SpirvType::Pointer { .. } | SpirvType::PhysicalPointer { .. } => TypeKind::Pointer,
             SpirvType::Function { .. } => TypeKind::Function,
             // HACK(eddyb) this is probably the closest `TypeKind` (which is still
             // very much LLVM-specific, sadly) has to offer to "resource handle".

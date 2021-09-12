@@ -70,8 +70,6 @@ fn compute_disallowed_argument_and_return_types(
     for inst in &module.types_global_values {
         match inst.class.opcode {
             Op::TypePointer => {
-                let storage_class = inst.operands[0].unwrap_storage_class();
-                let pointee = inst.operands[1].unwrap_id_ref();
                 disallowed_argument_types.insert(inst.result_id.unwrap());
                 disallowed_pointees.insert(inst.result_id.unwrap());
                 disallowed_return_types.insert(inst.result_id.unwrap());

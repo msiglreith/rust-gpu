@@ -390,7 +390,8 @@ impl BuilderSpirv {
         // The linker will always be ran on this module
         add_cap(&mut builder, &mut enabled_capabilities, Capability::Linkage);
 
-        builder.memory_model(AddressingModel::Logical, memory_model);
+        builder.memory_model(AddressingModel::PhysicalStorageBuffer64, memory_model);
+        builder.sampler_image_addressing_mode_nv(64);
 
         Self {
             builder: RefCell::new(builder),
@@ -402,8 +403,8 @@ impl BuilderSpirv {
         }
     }
 
-    pub fn finalize(self) -> Module {
-        self.builder.into_inner().module()
+    pub fn finalize(&mut self) -> Module {
+        self.builder.replace(Builder::new()).module()
     }
 
     pub fn dump_module_str(&self) -> String {

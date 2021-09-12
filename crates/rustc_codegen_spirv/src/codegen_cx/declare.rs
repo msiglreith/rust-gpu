@@ -127,6 +127,9 @@ impl<'tcx> CodegenCx<'tcx> {
         if attrs.buffer_store_intrinsic.is_some() {
             self.buffer_store_intrinsic_fn_id.borrow_mut().insert(fn_id);
         }
+        if attrs.resource_from_handle_intrinsic.is_some() {
+            self.resource_from_handle_fn_id.borrow_mut().insert(fn_id);
+        }
 
         let instance_def_id = instance.def_id();
 

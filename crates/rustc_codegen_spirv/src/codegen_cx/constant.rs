@@ -385,7 +385,8 @@ impl<'tcx> CodegenCx<'tcx> {
             SpirvType::Bool
             | SpirvType::Integer(..)
             | SpirvType::Float(_)
-            | SpirvType::Pointer { .. } => {
+            | SpirvType::Pointer { .. }
+            | SpirvType::PhysicalPointer { .. } => {
                 let size = ty_concrete.sizeof(self).unwrap();
                 let primitive = match ty_concrete {
                     SpirvType::Bool => Primitive::Int(Integer::fit_unsigned(0), false),

@@ -63,6 +63,9 @@ pub enum SpirvType {
     Pointer {
         pointee: Word,
     },
+    PhysicalPointer {
+        pointee: Word,
+    },
     Function {
         return_type: Word,
         arguments: Vec<Word>,
@@ -229,6 +232,20 @@ impl SpirvType {
                 }
                 result
             }
+            Self::PhysicalPointer { pointee } => {
+                let result = cx
+                    .emit_global()
+                    .type_pointer(id, StorageClass::PhysicalStorageBuffer, pointee);
+                // no pointers to functions
+                if let Self::Function { .. } = cx.lookup_type(pointee) {
+                    cx.zombie_even_in_user_code(
+                        result,
+                        def_span,
+                        "function pointer types are not allowed",
+                    );
+                }
+                result
+            }
             Self::Function {
                 return_type,
                 ref arguments,
@@ -357,7 +374,7 @@ impl SpirvType {
             Self::Array { element, count } => {
                 cx.lookup_type(element).sizeof(cx)? * cx.builder.lookup_const_u64(count).unwrap()
             }
-            Self::Pointer { .. } => cx.tcx.data_layout.pointer_size,
+            Self::Pointer { .. } | Self::PhysicalPointer { .. }=> cx.tcx.data_layout.pointer_size,
             Self::Image { .. }
             | Self::AccelerationStructureKhr
             | Self::RayQueryKhr
@@ -375,7 +392,7 @@ impl SpirvType {
             Self::Void | Self::Function { .. } => Align::from_bytes(0).unwrap(),
 
             Self::Bool => Align::from_bytes(1).unwrap(),
-            Self::Integer(width, _) | Self::Float(width) => Align::from_bits(width as u64).unwrap(),
+            Self::Integer(width, _) | Self::Float(width) => Align::from_bits(width as u64).unwrap_or(Align::from_bits(8).unwrap()),
             Self::Adt { align, .. } => align,
             // Vectors have size==align
             Self::Vector { .. } => Align::from_bytes(
@@ -387,7 +404,7 @@ impl SpirvType {
             Self::Array { element, .. }
             | Self::RuntimeArray { element }
             | Self::Matrix { element, .. } => cx.lookup_type(element).alignof(cx),
-            Self::Pointer { .. } => cx.tcx.data_layout.pointer_align.abi,
+            Self::Pointer { .. } | Self::PhysicalPointer { .. } => cx.tcx.data_layout.pointer_align.abi,
             Self::Image { .. }
             | Self::AccelerationStructureKhr
             | Self::RayQueryKhr
@@ -488,6 +505,11 @@ impl fmt::Debug for SpirvTypePrinter<'_, '_> {
                 .finish(),
             SpirvType::Pointer { pointee } => f
                 .debug_struct("Pointer")
+                .field("id", &self.id)
+                .field("pointee", &self.cx.debug_type(pointee))
+                .finish(),
+            SpirvType::PhysicalPointer { pointee } => f
+                .debug_struct("PhysicalPointer")
                 .field("id", &self.id)
                 .field("pointee", &self.cx.debug_type(pointee))
                 .finish(),
@@ -645,6 +667,10 @@ impl SpirvTypePrinter<'_, '_> {
                 f.write_str("*")?;
                 ty(self.cx, stack, f, pointee)
             }
+            SpirvType::PhysicalPointer { pointee } => {
+                f.write_str("*")?;
+                ty(self.cx, stack, f, pointee)
+            }
             SpirvType::Function {
                 return_type,
                 ref arguments,
@@ -724,7 +750,7 @@ impl TypeCache<'_> {
             .clone()
     }
 
-    fn def(&self, word: Word, ty: SpirvType) {
+    pub fn def(&self, word: Word, ty: SpirvType) {
         self.type_defs
             .borrow_mut()
             .insert_no_overwrite(word, ty)

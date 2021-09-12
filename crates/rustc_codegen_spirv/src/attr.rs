@@ -92,6 +92,7 @@ pub enum SpirvAttribute {
     UnrollLoops,
     BufferLoadIntrinsic,
     BufferStoreIntrinsic,
+    ResourceFromHandleIntrinsic,
 }
 
 // HACK(eddyb) this is similar to `rustc_span::Spanned` but with `value` as the
@@ -127,6 +128,7 @@ pub struct AggregatedSpirvAttributes {
     pub unroll_loops: Option<Spanned<()>>,
     pub buffer_load_intrinsic: Option<Spanned<()>>,
     pub buffer_store_intrinsic: Option<Spanned<()>>,
+    pub resource_from_handle_intrinsic: Option<Spanned<()>>,
 }
 
 struct MultipleAttrs {
@@ -226,6 +228,12 @@ impl AggregatedSpirvAttributes {
                 span,
                 "#[spirv(buffer_store_intrinsic)]",
             ),
+            ResourceFromHandleIntrinsic => try_insert(
+                &mut self.resource_from_handle_intrinsic,
+                (),
+                span,
+                "#[spirv(resource_from_handle_intrinsic)]",
+            )
         }
     }
 }
@@ -355,7 +363,9 @@ impl CheckSpirvAttrVisitor<'_> {
 
                     _ => Err(Expected("function or closure")),
                 },
-                SpirvAttribute::BufferLoadIntrinsic | SpirvAttribute::BufferStoreIntrinsic => {
+                SpirvAttribute::BufferLoadIntrinsic
+                | SpirvAttribute::BufferStoreIntrinsic
+                | SpirvAttribute::ResourceFromHandleIntrinsic => {
                     match target {
                         Target::Fn => Ok(()),
                         _ => Err(Expected("function")),

@@ -344,6 +344,7 @@ impl Symbols {
                 "buffer_store_intrinsic",
                 SpirvAttribute::BufferStoreIntrinsic,
             ),
+            ("resource_from_handle_intrinsic", SpirvAttribute::ResourceFromHandleIntrinsic),
         ]
         .iter()
         .cloned();

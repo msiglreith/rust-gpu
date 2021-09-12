@@ -942,6 +942,12 @@ pub fn instruction_signatures(op: Op) -> Option<&'static [InstSig<'static>]> {
         | Op::SubgroupAvcSicGetInterRawSadsINTEL => {
             reserved!(SPV_INTEL_device_side_avc_motion_estimation);
         }
+
+        // SPV_NV_bindless_texture
+        Op::ConvertUToImageNV
+        | Op::ConvertImageToUNV
+        | Op::ConvertUToSampledImageNV
+        | Op::SamplerImageAddressingModeNV => {}
     }
 
     None

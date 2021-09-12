@@ -13,7 +13,7 @@ use crate::symbols::Symbols;
 use crate::target::SpirvTarget;
 
 use rspirv::dr::{Module, Operand};
-use rspirv::spirv::{Decoration, LinkageType, Op, Word};
+use rspirv::spirv::{Decoration, LinkageType, MemoryAccess, Op, Word};
 use rustc_ast::ast::{InlineAsmOptions, InlineAsmTemplatePiece};
 use rustc_codegen_ssa::mir::debuginfo::{FunctionDebugContext, VariableKind};
 use rustc_codegen_ssa::traits::{
@@ -70,6 +70,8 @@ pub struct CodegenCx<'tcx> {
     pub buffer_load_intrinsic_fn_id: RefCell<FxHashSet<Word>>,
     /// Intrinsic for storing a <T> into a &[u32]
     pub buffer_store_intrinsic_fn_id: RefCell<FxHashSet<Word>>,
+    //
+    pub resource_from_handle_fn_id: RefCell<FxHashSet<Word>>,
     /// Builtin bounds-checking panics (from MIR `Assert`s) call `#[lang = "panic_bounds_check"]`.
     pub panic_bounds_check_fn_id: Cell<Option<Word>>,
 
@@ -129,6 +131,7 @@ impl<'tcx> CodegenCx<'tcx> {
             panic_fn_id: Default::default(),
             buffer_load_intrinsic_fn_id: Default::default(),
             buffer_store_intrinsic_fn_id: Default::default(),
+            resource_from_handle_fn_id: Default::default(),
             panic_bounds_check_fn_id: Default::default(),
             i8_i16_atomics_allowed: false,
             codegen_args,
@@ -202,8 +205,26 @@ impl<'tcx> CodegenCx<'tcx> {
             || self.tcx.crate_name(LOCAL_CRATE) == self.sym.num_traits
     }
 
-    pub fn finalize_module(self) -> Module {
+    pub fn finalize_module(mut self) -> Module {
         let mut result = self.builder.finalize();
+
+        // emit `Aligned` operands for physical storage buffer access operations
+        // todo: currently only OpLoad as it's the most common for `asm` blocks.
+        for inst in result.all_inst_iter_mut() {
+            match inst.class.opcode {
+                Op::Load => {
+                    let ty = self.type_cache.lookup(inst.result_type.unwrap());
+                    let align = ty.alignof(&self).bytes() as _;
+                    let num_operands = inst.operands.len();
+                    if num_operands == 1 { // todo: support multiple operands..
+                        inst.operands.push(Operand::MemoryAccess(MemoryAccess::ALIGNED));
+                        inst.operands.push(Operand::LiteralInt32(align));
+                    }
+                }
+                _ => (),
+            }
+        }
+
         result.annotations.extend(
             self.zombie_decorations
                 .into_inner()
