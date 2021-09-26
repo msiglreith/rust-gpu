@@ -1033,6 +1033,31 @@ impl<
         );
         result
     }
+
+    #[crate::macros::gpu_only]
+    pub unsafe fn sample_by_lod<F, V>(
+        &self,
+        coordinate: impl ImageCoordinate<F, DIM, ARRAYED>,
+        lod: f32,
+    ) -> V
+    where
+        F: Float,
+        V: Vector<SampledType, 4>,
+    {
+        let mut result = Default::default();
+        asm!(
+            "%sampledImage = OpLoad _ {image}",
+            "%coord = OpLoad _ {coord}",
+            "%lod = OpLoad _ {lod}",
+            "%result = OpImageSampleExplicitLod _ %sampledImage %coord Lod %lod",
+            "OpStore {result} %result",
+            result = in(reg) &mut result,
+            image = in(reg) self,
+            coord = in(reg) &coordinate,
+            lod = in(reg) &lod,
+        );
+        result
+    }
 }
 
 /// This is a marker trait to represent the constraints on `OpImageGather` too complex to be
