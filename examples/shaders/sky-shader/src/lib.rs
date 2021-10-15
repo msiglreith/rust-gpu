@@ -3,8 +3,8 @@
 #![cfg_attr(
     target_arch = "spirv",
     no_std,
-    feature(register_attr, lang_items),
-    register_attr(spirv)
+    feature(register_attr, lang_items, asm),
+    register_attr(spirv),
 )]
 // HACK(eddyb) can't easily see warnings otherwise from `spirv-builder` builds.
 #![deny(warnings)]
@@ -174,4 +174,17 @@ pub fn main_vs(#[spirv(vertex_index)] vert_idx: i32, #[spirv(position)] builtin_
     let pos = 2.0 * uv - Vec2::ONE;
 
     *builtin_pos = pos.extend(0.0).extend(1.0);
+
+    print_string()
+}
+
+pub fn print_string() {
+    unsafe {
+        asm!(
+            "%void = OpTypeVoid",
+            "%string = OpString \"Hello World\"",
+            "%debug_printf = OpExtInstImport \"NonSemantic.DebugPrintf\"",
+            "%result = OpExtInst %void %debug_printf 1 %string",
+        )
+    }
 }

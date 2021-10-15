@@ -200,6 +200,7 @@ pub fn compile_shaders() -> Vec<SpvFile> {
     let sky_shader_path =
         SpirvBuilder::new("examples/shaders/sky-shader", "spirv-unknown-vulkan1.1")
             .print_metadata(MetadataPrintout::None)
+            .extension("SPV_KHR_non_semantic_info")
             .build()
             .unwrap()
             .module
